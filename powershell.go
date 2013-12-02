@@ -28,8 +28,8 @@ var segments map[string]Segment = make(map[string]Segment)
 
 func InitSegments() {
     segments["username"] = Segment{250, 240, "\\u", nil}
-    segments["hostname"] = Segment{250, 238, "\\h", nil}
-    segments["path"] = Segment{fg: 250, bg: 237, callback: GetPathSegment}
+    segments["hostname"] = Segment{250, 238, "", GetHostSegment}
+    segments["path"] = Segment{250, 237, "", GetPathSegment}
     segments["prompt"] = Segment{15, 236, "\\$", nil}
 }
 
@@ -111,6 +111,17 @@ func main() {
         }
     }
     fmt.Print(reset)
+}
+
+func GetHostSegment(seg Segment) string {
+    var ssh string
+
+    isSSH := os.Getenv("SSH_CLIENT")
+    if isSSH != "" {
+        ssh = " " + chars.padlock + " "
+    }
+
+    return fmt.Sprintf(" %s\\h ", ssh)
 }
 
 func GetPathSegment(seg Segment) string {
