@@ -1,10 +1,8 @@
 package main
 
 import (
-    "flag"
     "fmt"
-    "os"
-    "strings"
+    "github.com/docopt/docopt.go"
 )
 
 type Characters struct {
@@ -13,39 +11,6 @@ type Characters struct {
     ln             string
     branch         string
     padlock        string
-}
-
-var chars Characters
-
-type Segment struct {
-    fg       int
-    bg       int
-    content  string
-    callback func(Segment) string
-}
-
-var segments map[string]Segment = make(map[string]Segment)
-
-func InitSegments() {
-    segments["username"] = Segment{250, 240, "\\u", nil}
-    segments["hostname"] = Segment{250, 238, "", GetHostSegment}
-    segments["path"] = Segment{250, 237, "", GetPathSegment}
-    segments["prompt"] = Segment{15, 236, "\\$", nil}
-}
-
-type Options struct {
-    shell    string
-    line     string
-    segments string
-}
-
-func InitCli() Options {
-    opt := Options{}
-    flag.StringVar(&opt.shell, "shell", "bash", "The type of the shell (zsh or bash [default])")
-    flag.StringVar(&opt.line, "line", "powerline", "The type of line characters (powerline [default], compatible or flat)")
-    flag.StringVar(&opt.segments, "segments", "", "The segments of the prompt")
-    flag.Parse()
-    return opt
 }
 
 const (
@@ -63,103 +28,82 @@ func BgColor(code int) string {
     return Color(48, code)
 }
 
-func PrintSegment(segment Segment, next Segment) {
-    var (
-        content  string
-        sepColor string
-    )
-    if segment.callback == nil {
-        content = fmt.Sprintf(" %s ", segment.content)
+func PrintSegment(segment *Segment, next *Segment) {
+    var sepColor string
+
+    if next == nil {
+        sepColor = reset + FgColor(segment.separatorFg)
     } else {
-        content = segment.callback(segment)
+        sepColor = FgColor(segment.separatorFg) + BgColor(next.bg)
     }
 
-    if next.bg == 0 && next.fg == 0 {
-        sepColor = reset + FgColor(segment.bg)
-    } else {
-        sepColor = FgColor(segment.bg) + BgColor(next.bg)
+    if segment.content[0] != ' ' {
+        segment.content = " " + segment.content
     }
-    fmt.Print(FgColor(segment.fg), BgColor(segment.bg), content, sepColor, chars.separator)
+    if segment.content[len(segment.content) - 1] != ' ' {
+        segment.content += " "
+    }
+
+    fmt.Print(FgColor(segment.fg), BgColor(segment.bg), segment.content, sepColor, segment.separator)
 }
+
+// Global variables
+var chars Characters
+var colorScheme ColorScheme
+var line []*Segment
 
 func main() {
-    InitSegments()
-    options := InitCli()
+    usage := `Go Powershell
 
-    switch options.line {
-    default:
-    case "powerline":
-        chars = Characters{"\uE0B0", "\uE0B1", "\uE0A1", "\uE0A0", "\uE0A2"}
+Usage: powershell [options] <segment>...
+
+Options:
+    -h, --help           Show this screen.
+    --version           Show the version.
+    -c TYPE, --characters=TYPE  The type of line characters (powerline, compatible or flat) [default: powerline]
+
+Segments:
+    username
+    hostname
+    path
+    git
+    prompt
+`
+    arguments, _ := docopt.Parse(usage, nil, true, "Go Powershell 0.1", true)
+
+    switch arguments["--characters"] {
+    case "flat":
+        chars = Characters{"", "", "", "", ""}
     case "compatible":
         chars = Characters{"\u25B6", "\u25B7", "", "", ""}
+    case "powerline":
+        chars = Characters{"\uE0B0", "\uE0B1", "\uE0A1", "\uE0A0", "\uE0A2"}
+    default:
+        chars = Characters{"\uE0B0", "\uE0B1", "\uE0A1", "\uE0A0", "\uE0A2"}
     }
 
-    segs := strings.Split(options.segments, ",")
-    for i := 0; i < len(segs); i++ {
-        _, exists := segments[segs[i]]
-        if exists {
-            var next Segment
-            if len(segs) > i+1 {
-                next, exists = segments[segs[i+1]]
-                if !exists {
-                    next = Segment{fg: 0, bg: 0}
-                }
-            } else {
-                next = Segment{fg: 0, bg: 0}
-            }
-            PrintSegment(segments[segs[i]], next)
+    // Init colors and set used ones
+    colors := InitColors()
+    colorScheme = colors["default"]
+
+    // Execute them and save them in an array before printing
+    segments := InitSegments()
+    line = make([]*Segment, 0, len(arguments["<segment>"].([]string)))
+    for _, seg := range arguments["<segment>"].([]string) {
+        if chosen, exists := segments[seg]; exists {
+            chosen()
         }
     }
+
+    // Print all chosen segments
+    for i, seg := range line {
+        if i < len(line) - 1 {
+            PrintSegment(seg, line[i + 1])
+        } else {
+            PrintSegment(seg, nil)
+        }
+    }
+
+    // Reset the cmdline before the user prompt
     fmt.Print(reset)
-}
-
-func GetHostSegment(seg Segment) string {
-    var ssh string
-
-    isSSH := os.Getenv("SSH_CLIENT")
-    if isSSH != "" {
-        ssh = " " + chars.padlock + " "
-    }
-
-    return fmt.Sprintf(" %s\\h ", ssh)
-}
-
-func GetPathSegment(seg Segment) string {
-    home := os.Getenv("HOME")
-    path, e := os.Getwd()
-    if e != nil {
-        path = os.Getenv("PWD")
-    }
-    // Replace home directory with a tilde
-    if strings.HasPrefix(path, home) {
-        path = "~" + path[len(home):]
-    }
-
-    var (
-        segString string
-        split     []string
-    )
-    split = strings.Split(path, "/")
-    // First element might be empty, ignore it
-    if split[0] == "" {
-        split = split[1:]
-    }
-    // Keep part short
-    if len(split) > 4 {
-        tmp := make([]string, 5)
-        tmp[0] = split[0]
-        tmp[1] = split[1]
-        tmp[2] = "\u2026"
-        tmp[3] = split[len(split)-2]
-        tmp[4] = split[len(split)-1]
-        split = tmp
-    }
-
-    for i, dir := range split {
-        segString += " " + dir + " "
-        if i < len(split)-1 {
-            segString += chars.separator_thin
-        }
-    }
-    return segString
 }
