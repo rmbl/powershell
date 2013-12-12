@@ -19,5 +19,10 @@ _cgo_export.*
 
 _testmain.go
 
+# Executables
 *.exe
+powershell
+
+# VIM
+*.swo
 
