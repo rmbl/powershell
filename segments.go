@@ -40,7 +40,14 @@ func InitSegments() map[string]func() {
 }
 
 func AddUserSegment() {
-    AppendSegment(colorScheme.UsernameFg, colorScheme.UsernameBg, "\\u")
+    fg := colorScheme.UsernameFg
+    bg := colorScheme.UsernameBg
+    if os.Geteuid() == 0 {
+        fg = colorScheme.RootFg
+        bg = colorScheme.RootBg
+    }
+
+    AppendSegment(fg, bg, "\\u")
 }
 
 func AddPromptSegment() {

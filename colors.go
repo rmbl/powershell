@@ -3,6 +3,8 @@ package main
 type ColorScheme struct {
 	UsernameFg int
 	UsernameBg int
+    RootFg int
+    RootBg int
 
 	HostnameFg int
 	HostnameBg int
@@ -31,6 +33,8 @@ func InitColors() map[string]ColorScheme {
 	colors["default"] = ColorScheme{
 		UsernameFg:  250,
 		UsernameBg:  240,
+        RootFg: 254,
+        RootBg: 1,
 		HostnameFg:  250,
 		HostnameBg:  238,
 		HomeFg:      15,
