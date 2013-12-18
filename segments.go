@@ -73,11 +73,14 @@ func AddPathSegment() {
     // Replace home directory with a tilde
     if strings.HasPrefix(path, home) {
         path = "~" + path[len(home):]
+    } else if path == "/" {
+        AppendSegment(colorScheme.CwdFg, colorScheme.PathBg, "   ")
+        return
     }
 
     split := strings.Split(path, "/")
     // First element might be empty, ignore it
-    if split[0] == "" {
+    if len(split) > 1 && split[0] == "" {
         split = split[1:]
     }
     // Keep part short
